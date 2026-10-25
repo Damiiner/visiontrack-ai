@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "author": "VisionTrack AI",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-led", "id": "led1", "top": 60, "left": -120, "attrs": { "color": "red" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 60, "left": -60, "attrs": { "value": "220" } },
+    { "type": "wokwi-buzzer", "id": "bz1", "top": 180, "left": -120, "attrs": { "volume": "0.1" } },
+    { "type": "board-ssd1306", "id": "oled1", "top": -40, "left": 240, "attrs": { "i2cAddress": "0x3c" } },
+    { "type": "wokwi-servo", "id": "servo1", "top": 160, "left": 240, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:26", "r1:2", "green", [ "h-10", "v0" ] ],
+    [ "r1:1", "led1:A", "green", [ "h-10", "v0" ] ],
+    [ "led1:C", "esp:GND.1", "black", [ "v40", "h90" ] ],
+    [ "esp:27", "bz1:2", "blue", [ "h-20", "v80", "h-40" ] ],
+    [ "bz1:1", "esp:GND.1", "black", [ "v20", "h120" ] ],
+    [ "oled1:SDA", "esp:21", "purple", [ "v0", "h-100", "v40" ] ],
+    [ "oled1:SCL", "esp:22", "orange", [ "v0", "h-80", "v60" ] ],
+    [ "oled1:VCC", "esp:3V3", "red", [ "v0", "h-140", "v20" ] ],
+    [ "oled1:GND", "esp:GND.2", "black", [ "v0", "h-160", "v-10" ] ],
+    [ "servo1:PWM", "esp:18", "gold", [ "v0", "h-100", "v-40" ] ],
+    [ "servo1:V+", "esp:3V3", "red", [ "v0", "h-120", "v-80" ] ],
+    [ "servo1:GND", "esp:GND.2", "black", [ "v0", "h-140", "v-100" ] ]
+  ],
+  "dependencies": {}
+}

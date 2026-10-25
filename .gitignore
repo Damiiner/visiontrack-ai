@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Model weights (downloaded automatically by Ultralytics)
+*.pt
+
+# PlatformIO build output
+.pio/
+.vscode/
+
+# Runtime logs
+detector/detections.csv
+detector/alarms.csv
