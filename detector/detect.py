@@ -6,6 +6,7 @@ import cv2
 import paho.mqtt.client as mqtt
 from collections import Counter, deque
 from ultralytics import YOLO
+from telegram_alert import send_alert
 
 BROKER = "broker.hivemq.com"
 PORT = 1883
@@ -101,6 +102,7 @@ while True:
         if tid not in inside_ids:
             del zone_since[tid]
     alarm = any(now - t >= ZONE_SECONDS for t in zone_since.values())
+    alarm_started = alarm and not last_alarm
 
     person_history.append(counts.get("person", 0))
     stable_persons = Counter(person_history).most_common(1)[0][0]
@@ -147,6 +149,14 @@ while True:
     if alarm:
         cv2.putText(annotated, "ZONE ALERT!", (10, 125),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+
+    # Telegram alert with a photo (sent once when the alarm starts)
+    if alarm_started:
+        send_alert(
+            annotated,
+            f"ZONE ALERT: person in the restricted zone at {time.strftime('%H:%M:%S')}\n"
+            f"Persons in view: {stable_persons} | IN: {count_in} OUT: {count_out}",
+        )
 
     cv2.imshow("VisionTrack AI", annotated)
     if cv2.waitKey(1) & 0xFF == ord("q"):

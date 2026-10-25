@@ -1,8 +1,8 @@
 # VisionTrack AI
 
-A real-time object detection and tracking system with an IoT back end. A laptop camera feeds a YOLOv8 detector, a tracker gives each object a persistent ID, and the results are sent over MQTT to a simulated ESP32 that reacts with an LED, a buzzer, an OLED display, and a servo.
+A real-time object detection and tracking system with an IoT back end. A laptop camera feeds a YOLOv8 detector, a tracker gives each object a persistent ID, and the results are sent over MQTT to a simulated ESP32 that reacts with an LED, a buzzer, an OLED display, and a servo. When the restricted-zone alarm triggers, a photo of the scene is also sent to your phone through Telegram.
 
-VisionTrack AI works as a small **smart occupancy and intrusion monitor**: it counts people entering and leaving, and raises a physical alarm when someone lingers in a restricted zone.
+VisionTrack AI works as a small **smart occupancy and intrusion monitor**: it counts people entering and leaving, and raises a physical and remote alarm when someone lingers in a restricted zone.
 
 ## Features
 
@@ -10,6 +10,7 @@ VisionTrack AI works as a small **smart occupancy and intrusion monitor**: it co
 - **Multi-object tracking** with persistent IDs (ByteTrack)
 - **IN / OUT counting** with a virtual line across the frame
 - **Restricted zone alarm**: triggers when a person stays inside a defined area for 3 seconds
+- **Telegram alerts with a photo**: when the alarm starts, the annotated camera frame (boxes, zone, "ZONE ALERT!") is sent to your Telegram chat, with a 30-second cooldown so alerts do not flood your phone
 - **Flicker smoothing**: majority vote over recent frames and averaged position, so the hardware does not twitch
 - **IoT output** over MQTT to an ESP32 (simulated in Wokwi):
   - LED: on when a person is in view, blinking during an alarm
@@ -27,13 +28,13 @@ Webcam
 Python (OpenCV + YOLOv8 + ByteTrack)     <- runs on the laptop
   |   counting line, zone logic, smoothing, CSV logs
   |
-  |  MQTT (JSON)  ->  public broker (HiveMQ)
-  v
-ESP32 (simulated in Wokwi, built with PlatformIO)
-  |-- LED
-  |-- Buzzer
-  |-- SSD1306 OLED
-  '-- Servo
+  |-- MQTT (JSON) -> public broker (HiveMQ) -> ESP32 (simulated in Wokwi)
+  |                                              |-- LED
+  |                                              |-- Buzzer
+  |                                              |-- SSD1306 OLED
+  |                                              '-- Servo
+  |
+  '-- Telegram Bot API (HTTPS) -> photo alert on your phone
 ```
 
 The laptop plays the role of an edge device such as a Raspberry Pi. The ESP32 is simulated in Wokwi, because Wokwi cannot run a Linux Raspberry Pi or a camera pipeline.
@@ -45,6 +46,7 @@ The laptop plays the role of an edge device such as a Raspberry Pi. The ESP32 is
 | Detection  | Python, OpenCV, Ultralytics YOLOv8 (PyTorch), COCO-pretrained weights            |
 | Tracking   | ByteTrack (via Ultralytics)                                                      |
 | Messaging  | MQTT (paho-mqtt, PubSubClient), HiveMQ public broker                             |
+| Alerts     | Telegram Bot API (requests, python-dotenv)                                       |
 | Firmware   | ESP32 (Arduino framework), PlatformIO, ArduinoJson, Adafruit SSD1306, ESP32Servo |
 | Simulation | Wokwi for VS Code                                                                |
 
@@ -53,14 +55,18 @@ The laptop plays the role of an edge device such as a Raspberry Pi. The ESP32 is
 ```
 visiontrack-ai/
 ├── detector/
-│   ├── detect.py          # detection, tracking, counting, zone alarm, MQTT publishing
-│   ├── detections.csv     # created at runtime
-│   └── alarms.csv         # created at runtime
-└── esp32/
-    ├── platformio.ini
-    ├── wokwi.toml
-    ├── diagram.json       # Wokwi circuit
-    └── src/main.cpp       # firmware
+│   ├── detect.py            # detection, tracking, counting, zone alarm, MQTT publishing
+│   ├── telegram_alert.py    # Telegram photo alerts
+│   ├── .env                 # your secrets (not committed, see below)
+│   ├── detections.csv       # created at runtime
+│   └── alarms.csv           # created at runtime
+├── esp32/
+│   ├── platformio.ini
+│   ├── wokwi.toml
+│   ├── diagram.json         # Wokwi circuit
+│   └── src/main.cpp         # firmware
+├── .gitignore
+└── README.md
 ```
 
 ## Setup
@@ -73,13 +79,29 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate     # macOS / Linux
 
-python -m pip install ultralytics opencv-python paho-mqtt
+python -m pip install ultralytics opencv-python paho-mqtt python-dotenv requests
 python detect.py
 ```
 
 Press `q` in the camera window to quit. The YOLO weights download automatically on the first run.
 
-### 2. ESP32 (PlatformIO + Wokwi)
+### 2. Telegram alerts (optional)
+
+1. In Telegram, open **@BotFather**, send `/newbot`, and follow the prompts. Save the token it gives you.
+2. Open your new bot (search for its exact username), tap **Start**, and send it a message.
+3. In a browser, open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` and find the number after `"chat":{"id":`. That is your chat ID.
+4. Create a file named `.env` inside `detector/`:
+
+```
+TELEGRAM_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
+
+The `.env` file is listed in `.gitignore`, so your token is never uploaded. Never share the token or commit it. If it leaks, send `/revoke` to @BotFather to get a new one.
+
+Without a `.env` file, the system still works. It just skips the Telegram alerts.
+
+### 3. ESP32 (PlatformIO + Wokwi)
 
 1. Open the `esp32` folder in VS Code with the PlatformIO and Wokwi extensions installed.
 2. Build the firmware (PlatformIO: Build, the checkmark in the bottom bar).
@@ -129,6 +151,12 @@ In `detector/detect.py`:
 | `ZONE`                    | Restricted zone rectangle as fractions of the frame  |
 | `ZONE_SECONDS`            | Time inside the zone before the alarm triggers       |
 
+In `detector/telegram_alert.py`:
+
+| Setting    | Purpose                                              |
+| ---------- | ---------------------------------------------------- |
+| `COOLDOWN` | Minimum seconds between Telegram alerts (default 30) |
+
 ## Limitations
 
 - Uses a general COCO-pretrained model, so similar objects (phone and laptop at odd angles, for example) can still be confused, and the model has no class for things like fingers
@@ -136,14 +164,15 @@ In `detector/detect.py`:
 - Performance depends on the laptop CPU, and larger models give lower FPS
 - The ESP32 is simulated, and the public MQTT broker can occasionally drop connections (the firmware reconnects automatically)
 - The counting line is vertical, and the zone is a fixed rectangle
+- Telegram alerts need an internet connection and are rate-limited by a cooldown, so a second event within 30 seconds does not send a new photo
 
 ## Future work
 
 - Deploy on a real Raspberry Pi with a camera and a real ESP32
 - Fine-tune the model on a custom dataset for specific objects
 - Live dashboard (Streamlit) built from the CSV logs
-- Telegram alerts with a snapshot when the zone alarm triggers
 - Authenticated, private MQTT broker
+- Configurable zone and counting line from a settings file or the mouse
 
 ## Author
 

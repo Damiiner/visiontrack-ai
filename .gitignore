@@ -3,6 +3,10 @@
 __pycache__/
 *.pyc
 
+# Secrets (Telegram token and chat ID)
+.env
+detector/.env
+
 # Model weights (downloaded automatically by Ultralytics)
 *.pt
 
